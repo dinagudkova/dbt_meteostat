@@ -1,56 +1,53 @@
-WITH departures AS (
+WITH departures_stats AS (
     SELECT
         origin AS faa,
+        COUNT(*) AS total_departures_planned,
         COUNT(DISTINCT dest) AS unique_departure_connections,
-        COUNT(*) AS planned_departures,
-        COUNT(*) FILTER (WHERE cancelled = 1) AS cancelled_departures,
-        COUNT(*) FILTER (WHERE diverted = 1) AS diverted_departures,
-        COUNT(*) FILTER (WHERE cancelled = 0) AS occurred_departures,
-        COUNT(DISTINCT tail_number) AS unique_airplanes_departures,
-        COUNT(DISTINCT airline) AS unique_airlines_departures
+        SUM(CASE WHEN cancelled = 1 THEN 1 ELSE 0 END) AS departures_cancelled,
+        SUM(CASE WHEN diverted = 1 THEN 1 ELSE 0 END) AS departures_diverted,
+        COUNT(DISTINCT tail_number) AS unique_planes_departing,
+        COUNT(DISTINCT airline) AS unique_airlines_departing
     FROM {{ ref('prep_flights') }}
     GROUP BY origin
 ),
-arrivals AS (
+arrivals_stats AS (
     SELECT
         dest AS faa,
+        COUNT(*) AS total_arrivals_planned,
         COUNT(DISTINCT origin) AS unique_arrival_connections,
-        COUNT(*) AS planned_arrivals,
-        COUNT(*) FILTER (WHERE cancelled = 1) AS cancelled_arrivals,
-        COUNT(*) FILTER (WHERE diverted = 1) AS diverted_arrivals,
-        COUNT(*) FILTER (WHERE cancelled = 0) AS occurred_arrivals,
-        COUNT(DISTINCT tail_number) AS unique_airplanes_arrivals,
-        COUNT(DISTINCT airline) AS unique_airlines_arrivals
+        SUM(CASE WHEN cancelled = 1 THEN 1 ELSE 0 END) AS arrivals_cancelled,
+        SUM(CASE WHEN diverted = 1 THEN 1 ELSE 0 END) AS arrivals_diverted,
+        COUNT(DISTINCT tail_number) AS unique_planes_arriving,
+        COUNT(DISTINCT airline) AS unique_airlines_arriving
     FROM {{ ref('prep_flights') }}
     GROUP BY dest
 ),
-combined AS (
+combined_stats AS (
     SELECT
         COALESCE(d.faa, a.faa) AS faa,
+        COALESCE(d.total_departures_planned, 0) AS total_departures_planned,
+        COALESCE(a.total_arrivals_planned, 0) AS total_arrivals_planned,
+        COALESCE(d.total_departures_planned, 0) + COALESCE(a.total_arrivals_planned, 0) AS total_flights_planned,
         COALESCE(d.unique_departure_connections, 0) AS unique_departure_connections,
         COALESCE(a.unique_arrival_connections, 0) AS unique_arrival_connections,
-        COALESCE(d.planned_departures, 0) + COALESCE(a.planned_arrivals, 0) AS total_flights_planned,
-        COALESCE(d.cancelled_departures, 0) + COALESCE(a.cancelled_arrivals, 0) AS total_flights_cancelled,
-        COALESCE(d.diverted_departures, 0) + COALESCE(a.diverted_arrivals, 0) AS total_flights_diverted,
-        COALESCE(d.occurred_departures, 0) + COALESCE(a.occurred_arrivals, 0) AS total_flights_occurred,
-        ROUND((COALESCE(d.unique_airplanes_departures, 0) + COALESCE(a.unique_airplanes_arrivals, 0)) / 2.0, 2) AS avg_unique_airplanes,
-        ROUND((COALESCE(d.unique_airlines_departures, 0) + COALESCE(a.unique_airlines_arrivals, 0)) / 2.0, 2) AS avg_unique_airlines
-    FROM departures d
-    FULL OUTER JOIN arrivals a ON d.faa = a.faa
+        COALESCE(d.departures_cancelled, 0) + COALESCE(a.arrivals_cancelled, 0) AS total_cancelled,
+        COALESCE(d.departures_diverted, 0) + COALESCE(a.arrivals_diverted, 0) AS total_diverted,
+        (COALESCE(d.total_departures_planned, 0) + COALESCE(a.total_arrivals_planned, 0))
+            - (COALESCE(d.departures_cancelled, 0) + COALESCE(a.arrivals_cancelled, 0)) AS total_flights_occurred,
+        ROUND(
+            (COALESCE(d.unique_planes_departing, 0) + COALESCE(a.unique_planes_arriving, 0)) / 2.0, 2
+        ) AS avg_unique_planes,
+        ROUND(
+            (COALESCE(d.unique_airlines_departing, 0) + COALESCE(a.unique_airlines_arriving, 0)) / 2.0, 2
+        ) AS avg_unique_airlines
+    FROM departures_stats d
+    FULL OUTER JOIN arrivals_stats a ON d.faa = a.faa
 )
 SELECT
-    c.faa,
+    c.*,
     ap.name,
     ap.city,
-    ap.country,
-    c.unique_departure_connections,
-    c.unique_arrival_connections,
-    c.total_flights_planned,
-    c.total_flights_cancelled,
-    c.total_flights_diverted,
-    c.total_flights_occurred,
-    c.avg_unique_airplanes,
-    c.avg_unique_airlines
-FROM combined c
-LEFT JOIN {{ ref('prep_airports') }} ap ON ap.faa = c.faa
+    ap.country
+FROM combined_stats c
+LEFT JOIN {{ ref('prep_airports') }} ap ON c.faa = ap.faa
 ORDER BY c.faa

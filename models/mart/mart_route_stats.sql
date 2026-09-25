@@ -3,36 +3,36 @@ WITH route_stats AS (
         origin,
         dest,
         COUNT(*) AS total_flights,
-        COUNT(DISTINCT tail_number) AS unique_airplanes,
+        COUNT(DISTINCT tail_number) AS unique_planes,
         COUNT(DISTINCT airline) AS unique_airlines,
         ROUND(AVG(actual_elapsed_time), 2) AS avg_actual_elapsed_time,
-        ROUND(AVG(arr_delay), 2) AS avg_arrival_delay,
-        MAX(arr_delay) AS max_arrival_delay,
-        MIN(arr_delay) AS min_arrival_delay,
-        COUNT(*) FILTER (WHERE cancelled = 1) AS total_cancelled,
-        COUNT(*) FILTER (WHERE diverted = 1) AS total_diverted
+        ROUND(AVG(arr_delay), 2) AS avg_arr_delay,
+        MAX(arr_delay) AS max_arr_delay,
+        MIN(arr_delay) AS min_arr_delay,
+        SUM(cancelled) AS total_cancelled,
+        SUM(diverted) AS total_diverted
     FROM {{ ref('prep_flights') }}
     GROUP BY origin, dest
 )
 SELECT
-    rs.origin,
-    origin_airport.name AS origin_name,
-    origin_airport.city AS origin_city,
-    origin_airport.country AS origin_country,
-    rs.dest,
-    dest_airport.name AS dest_name,
-    dest_airport.city AS dest_city,
-    dest_airport.country AS dest_country,
-    rs.total_flights,
-    rs.unique_airplanes,
-    rs.unique_airlines,
-    rs.avg_actual_elapsed_time,
-    rs.avg_arrival_delay,
-    rs.max_arrival_delay,
-    rs.min_arrival_delay,
-    rs.total_cancelled,
-    rs.total_diverted
-FROM route_stats rs
-LEFT JOIN {{ ref('prep_airports') }} origin_airport ON origin_airport.faa = rs.origin
-LEFT JOIN {{ ref('prep_airports') }} dest_airport ON dest_airport.faa = rs.dest
-ORDER BY rs.origin, rs.dest
+    r.origin,
+    r.dest,
+    r.total_flights,
+    r.unique_planes,
+    r.unique_airlines,
+    r.avg_actual_elapsed_time,
+    r.avg_arr_delay,
+    r.max_arr_delay,
+    r.min_arr_delay,
+    r.total_cancelled,
+    r.total_diverted,
+    origin_ap.name AS origin_name,
+    origin_ap.city AS origin_city,
+    origin_ap.country AS origin_country,
+    dest_ap.name AS dest_name,
+    dest_ap.city AS dest_city,
+    dest_ap.country AS dest_country
+FROM route_stats r
+LEFT JOIN {{ ref('prep_airports') }} origin_ap ON r.origin = origin_ap.faa
+LEFT JOIN {{ ref('prep_airports') }} dest_ap ON r.dest = dest_ap.faa
+ORDER BY r.total_flights DESC
