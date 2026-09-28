@@ -5,7 +5,7 @@ SELECT
     order_year,
     order_month,
     category_name,
-    ROUND(SUM(revenue), 2) AS total_revenue,
+    SUM(revenue) AS total_revenue,
     COUNT(DISTINCT order_id) AS total_orders,
     AVG(revenue) AS avg_revenue_per_order
 FROM sales
