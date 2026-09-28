@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: mart_sales_performance
+    description: "Monthly sales performance by category"
+    columns:
+      - name: order_year
+        description: "Year when the order was placed"
+        data_tests:
+          - not_null
+      - name: order_month
+        description: "Month when the order was placed"
+        data_tests:
+          - not_null
+      - name: category_name
+        description: "Product category"
+        data_tests:
+          - not_null
+      - name: total_revenue
+        description: "Sum of revenue for that period and category"
+        data_tests:
+          - not_null
